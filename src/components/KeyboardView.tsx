@@ -81,6 +81,51 @@ interface KeyCapProps {
   onPointerDown?: (index: number, e: RPointerEvent<SVGGElement>) => void;
 }
 
+function Knob({ k, side, edge }: { k: Key; side: string; edge: string }) {
+  const cx = (k.x + k.w / 2) * U;
+  const cy = (k.y + k.h / 2) * U;
+  const rad = (Math.min(k.w, k.h) * U) / 2 - 2;
+  const inner = rad * 0.78;
+  const ridges = Array.from({ length: 24 }, (_, i) => {
+    const a = (i / 24) * Math.PI * 2;
+    return (
+      <line
+        key={i}
+        x1={cx + Math.cos(a) * inner}
+        y1={cy + Math.sin(a) * inner}
+        x2={cx + Math.cos(a) * (rad - 1)}
+        y2={cy + Math.sin(a) * (rad - 1)}
+        stroke={edge}
+        strokeWidth={1}
+        strokeOpacity={0.45}
+      />
+    );
+  });
+  const label = k.labels.find((l) => l) ?? "";
+  const fs = fontPx(k.defaultTextSize) - 1;
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={rad} fill={side} stroke={edge} strokeWidth={1} />
+      {ridges}
+      <circle cx={cx} cy={cy} r={inner} fill={k.color} stroke={shade(k.color, -0.12)} strokeWidth={0.8} />
+      <line x1={cx} y1={cy - inner + 3} x2={cx} y2={cy - inner * 0.45} stroke={k.defaultTextColor} strokeWidth={2} strokeLinecap="round" />
+      {label && (
+        <text
+          x={cx}
+          y={cy + inner * 0.45 + fs * 0.35}
+          fontSize={fs}
+          textAnchor="middle"
+          fill={k.defaultTextColor}
+          fontFamily="Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+          fontWeight={500}
+        >
+          {labelLines(label)[0]}
+        </text>
+      )}
+    </g>
+  );
+}
+
 export const KeyCap = memo(function KeyCap({ k, index, selected, onPointerDown }: KeyCapProps) {
   const flat = /flat|chiclet/i.test(k.profile);
   const inset = flat ? { l: 3, r: 3, t: 3, b: 3 } : { l: 6, r: 6, t: 3, b: 9 };
@@ -113,7 +158,11 @@ export const KeyCap = memo(function KeyCap({ k, index, selected, onPointerDown }
       onPointerDown={onPointerDown ? (e) => onPointerDown(index, e) : undefined}
       style={onPointerDown ? { cursor: "grab" } : undefined}
     >
+      {k.knob && !k.decal && (
+        <Knob k={k} side={side} edge={edge} />
+      )}
       {!k.decal &&
+        !k.knob &&
         (k.stepped
           ? order.map((r, i) => {
               const p = px(r);
@@ -142,10 +191,10 @@ export const KeyCap = memo(function KeyCap({ k, index, selected, onPointerDown }
                 })}
               </>
             ))}
-      {k.nub && !k.decal && (
+      {k.nub && !k.decal && !k.knob && (
         <rect x={main.ix + main.iw / 2 - 6} y={main.iy + main.ih - 5} width={12} height={2} rx={1} fill={shade(k.color, -0.35)} />
       )}
-      <KeyLabels k={k} ix={main.ix} iy={main.iy} iw={main.iw} ih={main.ih} fy={main.iy + main.ih} fh={inset.b + 1} />
+      {!k.knob && <KeyLabels k={k} ix={main.ix} iy={main.iy} iw={main.iw} ih={main.ih} fy={main.iy + main.ih} fh={inset.b + 1} />}
       {selected &&
         rects.map((r, i) => (
           <rect
@@ -155,7 +204,7 @@ export const KeyCap = memo(function KeyCap({ k, index, selected, onPointerDown }
             y={r.y * U - 1}
             width={r.w * U + 2}
             height={r.h * U + 2}
-            rx={6}
+            rx={k.knob ? (Math.min(r.w, r.h) * U) / 2 + 1 : 6}
             fill="none"
           />
         ))}

@@ -21,6 +21,7 @@ export interface Key {
   ghost: boolean;
   stepped: boolean;
   decal: boolean;
+  knob: boolean;
   sm: string;
   sb: string;
   st: string;
@@ -72,6 +73,7 @@ export function newKey(partial: Partial<Key> = {}): Key {
     ghost: false,
     stepped: false,
     decal: false,
+    knob: false,
     sm: "",
     sb: "",
     st: "",
@@ -147,7 +149,7 @@ export function parseKle(rows: unknown[]): Layout {
           cur.x += cur.w;
           cur.w = cur.h = 1;
           cur.x2 = cur.y2 = cur.w2 = cur.h2 = 0;
-          cur.nub = cur.stepped = cur.decal = false;
+          cur.nub = cur.stepped = cur.decal = cur.knob = false;
         } else if (item && typeof item === "object") {
           const p = item as Record<string, unknown>;
           if (p.r != null) cur.r = num(p.r, 0);
@@ -183,6 +185,7 @@ export function parseKle(rows: unknown[]): Layout {
           if (p.l != null) cur.stepped = !!p.l;
           if (p.d != null) cur.decal = !!p.d;
           if (p.g != null) cur.ghost = !!p.g;
+          if (p.knob != null) cur.knob = !!p.knob;
           if (p.sm != null) cur.sm = str(p.sm);
           if (p.sb != null) cur.sb = str(p.sb);
           if (p.st != null) cur.st = str(p.st);
@@ -334,6 +337,7 @@ export function serializeKle(layout: Layout): unknown[] {
     if (key.nub) props.n = true;
     if (key.stepped) props.l = true;
     if (key.decal) props.d = true;
+    if (key.knob) props.knob = true;
     if (Object.keys(props).length) row.push(props);
     row.push(trimEnd(o.labels, (l) => !l).join("\n"));
   }
@@ -493,6 +497,7 @@ export function sanitizeLayout(input: unknown): Layout {
       ghost: !!k.ghost,
       stepped: !!k.stepped,
       decal: !!k.decal,
+      knob: !!k.knob,
       sm: text(k.sm, 40),
       sb: text(k.sb, 40),
       st: text(k.st, 40),
@@ -571,6 +576,7 @@ export interface PreviewKey {
   rx?: number;
   ry?: number;
   c: string;
+  k?: 1;
 }
 
 export function toPreview(layout: Layout): { bg: string; keys: PreviewKey[] } {
@@ -578,6 +584,7 @@ export function toPreview(layout: Layout): { bg: string; keys: PreviewKey[] } {
     const p: PreviewKey = { x: round(k.x), y: round(k.y), w: k.w, h: k.h, c: k.color };
     if (k.x2 || k.y2 || k.w2 !== k.w || k.h2 !== k.h) Object.assign(p, { x2: k.x2, y2: k.y2, w2: k.w2, h2: k.h2 });
     if (k.r) Object.assign(p, { r: k.r, rx: k.rx, ry: k.ry });
+    if (k.knob) p.k = 1;
     return p;
   });
   return { bg: layout.meta.backcolor, keys };
@@ -600,6 +607,7 @@ export function previewToLayout(p: { bg: string; keys: PreviewKey[] }): Layout {
         rx: k.rx ?? 0,
         ry: k.ry ?? 0,
         color: k.c,
+        knob: k.k === 1,
       }),
     ),
   };

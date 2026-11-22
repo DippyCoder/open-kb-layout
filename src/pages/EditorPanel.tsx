@@ -267,6 +267,7 @@ function KeyPanel({ layout, selected, commit, slot, setSlot }: KeyPanelProps) {
           <Toggle label="Stepped" value={g((k) => k.stepped)} onChange={(v) => set((k) => void (k.stepped = v), "")} />
           <Toggle label="Ghosted" value={g((k) => k.ghost)} onChange={(v) => set((k) => void (k.ghost = v), "")} />
           <Toggle label="Decal" value={g((k) => k.decal)} onChange={(v) => set((k) => void (k.decal = v), "")} />
+          <Toggle label="Knob" value={g((k) => k.knob)} onChange={(v) => set((k) => void (k.knob = v), "")} />
         </div>
       </section>
 

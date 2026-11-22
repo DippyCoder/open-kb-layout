@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:store": "wrangler dev -c worker/wrangler.toml --port 8789",
     "dev:api": "wrangler pages dev dist --port 8788",
     "build": "vite build",
     "preview": "npm run build && wrangler pages dev dist --port 8788",
     "typecheck": "tsc --noEmit",
-    "deploy": "npm run build && wrangler pages deploy dist"
+    "deploy:store": "wrangler deploy -c worker/wrangler.toml",
+    "deploy": "npm run deploy:store && npm run build && wrangler pages deploy dist"
   },
   "dependencies": {
     "lucide-react": "^1.77.0",

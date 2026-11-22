@@ -1780,3 +1780,57 @@ main > section + section {
     --glass: #fff;
   }
 }
+
+.kt {
+  display: grid;
+  gap: 12px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 6px;
+  white-space: normal;
+}
+.kt-group {
+  display: grid;
+  gap: 6px;
+}
+.kt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.kt-item {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 8px 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--fill-1);
+  color: var(--ink);
+  font: 400 0.75rem/1.2 var(--font);
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s var(--ease), transform 0.2s var(--ease);
+}
+.kt-item:hover,
+.kt-item:focus-visible {
+  background: var(--fill-3);
+  outline: none;
+}
+.kt-item:active {
+  transform: scale(0.97);
+}
+.kt-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 46px;
+}
+.kt-art svg {
+  max-height: 46px;
+}
+.kt-name {
+  color: var(--ink-2);
+}
+.glass .pop {
+  background: var(--glass-solid);
+}

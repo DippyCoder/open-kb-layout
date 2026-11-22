@@ -1,11 +1,13 @@
-import { parse, stringify } from "smol-toml";
+import { stringify } from "smol-toml";
+import type { LayoutRow, UserStore } from "../../worker/store";
 
 export interface Env {
   KV: KVNamespace;
-  BUCKET: R2Bucket;
+  STORE: DurableObjectNamespace<UserStore>;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   ADMIN_LOGINS?: string;
+  SITE_URL?: string;
   DEV_LOGIN?: string;
 }
 
@@ -16,23 +18,7 @@ export interface SessionUser {
   avatar: string;
 }
 
-export interface StoredLayout {
-  id: string;
-  title: string;
-  description: string;
-  public: boolean;
-  created: string;
-  updated: string;
-  forked_from?: string;
-  forked_from_title?: string;
-  forked_from_author?: string;
-  data: string;
-}
-
-export interface UserFile {
-  user: SessionUser & { created: string };
-  layouts: StoredLayout[];
-}
+export type StoredLayout = LayoutRow;
 
 export const LAYOUT_LIMIT = 100;
 export const SESSION_COOKIE = "okl_session";
@@ -107,17 +93,13 @@ export const isAdmin = (env: Env, u: SessionUser | null) =>
     .filter(Boolean)
     .includes(u.login.toLowerCase());
 
-const fileKey = (uid: number) => `users/${uid}.toml`;
-
-export async function readUserFile(env: Env, uid: number): Promise<{ file: UserFile | null; etag: string | null }> {
-  const obj = await env.BUCKET.get(fileKey(uid));
-  if (!obj) return { file: null, etag: null };
-  const parsed = parse(await obj.text()) as unknown as UserFile;
-  parsed.layouts ??= [];
-  return { file: parsed, etag: obj.etag };
+export function store(env: Env, uid: number) {
+  return env.STORE.get(env.STORE.idFromName(String(uid)));
 }
 
-function clean<T>(v: T): T {
+export const profileOf = (u: SessionUser) => ({ id: u.id, login: u.login, name: u.name, avatar: u.avatar });
+
+export function clean<T>(v: T): T {
   if (Array.isArray(v)) return v.map(clean) as T;
   if (v && typeof v === "object") {
     const out: Record<string, unknown> = {};
@@ -127,25 +109,6 @@ function clean<T>(v: T): T {
   return v;
 }
 
-export async function mutateUserFile<T>(
-  env: Env,
-  user: SessionUser,
-  fn: (file: UserFile) => T | Promise<T>,
-): Promise<T> {
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const { file, etag } = await readUserFile(env, user.id);
-    const f: UserFile = file ?? {
-      user: { ...user, created: new Date().toISOString() },
-      layouts: [],
-    };
-    f.user = { ...f.user, id: user.id, login: user.login, name: user.name, avatar: user.avatar };
-    const result = await fn(f);
-    const body = stringify(clean(f) as unknown as Record<string, unknown>);
-    const put = await env.BUCKET.put(fileKey(user.id), body, {
-      httpMetadata: { contentType: "application/toml" },
-      ...(etag ? { onlyIf: { etagMatches: etag } } : {}),
-    });
-    if (put) return result;
-  }
-  throw new HttpError(409, "Your layouts changed elsewhere, please try again");
+export function toToml(data: Record<string, unknown>): string {
+  return stringify(clean(data));
 }

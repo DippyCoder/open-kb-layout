@@ -11,12 +11,13 @@ import {
   getCookie,
   isAdmin,
   json,
-  mutateUserFile,
   newLayoutId,
   ownerOf,
+  profileOf,
   randomId,
-  readUserFile,
   requireUser,
+  store,
+  toToml,
 } from "../_lib/core";
 import { sanitizeLayout, toNative, toPreview, LayoutParseError } from "../../src/lib/layout";
 
@@ -83,6 +84,7 @@ async function route({ request: req, env }: Ctx): Promise<Response> {
     if (b && !c && m === "PUT") return updateLayout(req, env, b);
     if (b && !c && m === "DELETE") return deleteLayout(req, env, b);
   }
+  if (a === "export" && !b && m === "GET") return exportToml(req, env);
   if (a === "discover" && m === "GET") return discover(env, url);
   if (a === "featured" && !b && m === "GET") return featured(req, env);
   if (a === "featured" && b && m === "POST") return toggleFeatured(req, env, b);
@@ -96,6 +98,9 @@ async function login(req: Request, env: Env, url: URL) {
     dev.searchParams.set("next", safeNext(url.searchParams.get("next")));
     if (url.searchParams.get("as")) dev.searchParams.set("login", url.searchParams.get("as")!);
     return new Response(null, { status: 302, headers: { location: dev.pathname + dev.search } });
+  }
+  if (env.SITE_URL && url.origin !== env.SITE_URL) {
+    return Response.redirect(`${env.SITE_URL}${url.pathname}${url.search}`, 302);
   }
   if (!env.GITHUB_CLIENT_ID) throw new HttpError(500, "GitHub OAuth is not configured");
   const state = randomId(16);
@@ -183,8 +188,8 @@ function summarize(l: StoredLayout, owner: { login: string; avatar: string }) {
 
 async function listMine(req: Request, env: Env) {
   const u = await requireUser(req, env);
-  const { file } = await readUserFile(env, u.id);
-  const layouts = (file?.layouts ?? [])
+  const rows = await store(env, u.id).list();
+  const layouts = rows
     .map((l) => {
       let preview = null;
       try {
@@ -252,9 +257,7 @@ async function syncIndex(env: Env, user: SessionUser, l: StoredLayout) {
 async function loadLayout(env: Env, id: string) {
   const uid = ownerOf(id);
   if (!uid) return null;
-  const { file } = await readUserFile(env, uid);
-  const l = file?.layouts.find((x) => x.id === id);
-  return l && file ? { layout: l, owner: file.user } : null;
+  return store(env, uid).get(id);
 }
 
 async function createLayout(req: Request, env: Env) {
@@ -269,21 +272,19 @@ async function createLayout(req: Request, env: Env) {
     }
   }
   const now = new Date().toISOString();
-  const stored = await mutateUserFile(env, u, (f) => {
-    if (f.layouts.length >= LAYOUT_LIMIT) throw new HttpError(403, "You have reached the maximum number of saved layouts. Delete one to save another.");
-    const l: StoredLayout = {
-      id: newLayoutId(u.id),
-      title: p.title,
-      description: p.description,
-      public: p.isPublic,
-      created: now,
-      updated: now,
-      ...(fork ? { forked_from: fork.id, forked_from_title: fork.title, forked_from_author: fork.author } : {}),
-      data: p.data,
-    };
-    f.layouts.push(l);
-    return l;
-  });
+  const row: StoredLayout = {
+    id: newLayoutId(u.id),
+    title: p.title,
+    description: p.description,
+    public: p.isPublic,
+    created: now,
+    updated: now,
+    ...(fork ? { forked_from: fork.id, forked_from_title: fork.title, forked_from_author: fork.author } : {}),
+    data: p.data,
+  };
+  const res = await store(env, u.id).create(profileOf(u), row, LAYOUT_LIMIT);
+  if (!res.ok) throw new HttpError(403, "You have reached the maximum number of saved layouts. Delete one to save another.");
+  const stored = res.value;
   await syncIndex(env, u, stored);
   return json({ layout: { ...summarize(stored, u), data: JSON.parse(stored.data) } }, { status: 201 });
 }
@@ -305,22 +306,27 @@ async function updateLayout(req: Request, env: Env, id: string) {
   const u = await requireUser(req, env);
   if (ownerOf(id) !== u.id) throw new HttpError(403, "You can only edit your own layouts");
   const body = await readBody(req);
-  const stored = await mutateUserFile(env, u, (f) => {
-    const l = f.layouts.find((x) => x.id === id);
-    if (!l) throw new HttpError(404, "Layout not found");
-    if (body.layout !== undefined) {
-      const p = prepare({ ...body, title: body.title ?? l.title, description: body.description ?? l.description });
-      l.title = p.title;
-      l.description = p.description;
-      l.data = p.data;
-    } else {
-      if (typeof body.title === "string") l.title = body.title.trim().slice(0, 80) || l.title;
-      if (typeof body.description === "string") l.description = body.description.trim().slice(0, 500);
-    }
-    if (typeof body.public === "boolean") l.public = body.public;
-    l.updated = new Date().toISOString();
-    return { ...l };
-  });
+  const s = store(env, u.id);
+  const found = await s.get(id);
+  if (!found) throw new HttpError(404, "Layout not found");
+  const l: StoredLayout = { ...found.layout };
+  if (body.layout !== undefined) {
+    const p = prepare({ ...body, title: body.title ?? l.title, description: body.description ?? l.description });
+    l.title = p.title;
+    l.description = p.description;
+    l.data = p.data;
+  } else {
+    if (typeof body.title === "string") l.title = body.title.trim().slice(0, 80) || l.title;
+    if (typeof body.description === "string") l.description = body.description.trim().slice(0, 500);
+  }
+  if (typeof body.public === "boolean") l.public = body.public;
+  l.updated = new Date().toISOString();
+  const res = await s.update(profileOf(u), l, found.layout.updated);
+  if (!res.ok) {
+    if (res.reason === "missing") throw new HttpError(404, "Layout not found");
+    throw new HttpError(409, "This layout changed elsewhere, reload and try again");
+  }
+  const stored = res.value;
   await syncIndex(env, u, stored);
   return json({ layout: { ...summarize(stored, u), data: JSON.parse(stored.data) } });
 }
@@ -328,11 +334,7 @@ async function updateLayout(req: Request, env: Env, id: string) {
 async function deleteLayout(req: Request, env: Env, id: string) {
   const u = await requireUser(req, env);
   if (ownerOf(id) !== u.id) throw new HttpError(403, "You can only delete your own layouts");
-  await mutateUserFile(env, u, (f) => {
-    const before = f.layouts.length;
-    f.layouts = f.layouts.filter((x) => x.id !== id);
-    if (f.layouts.length === before) throw new HttpError(404, "Layout not found");
-  });
+  if (!(await store(env, u.id).remove(id))) throw new HttpError(404, "Layout not found");
   await env.KV.delete(`pub:${id}`);
   return json({ ok: true });
 }
@@ -405,3 +407,34 @@ async function userPage(env: Env, login: string) {
   const layouts = await values(env, items.slice(0, 100).map((i) => i.id));
   return json({ login: layouts[0]?.author ?? login, avatar: layouts[0]?.avatar ?? "", layouts });
 }
+
+async function exportToml(req: Request, env: Env) {
+  const u = await requireUser(req, env);
+  const s = store(env, u.id);
+  const [profile, rows] = await Promise.all([s.profile(), s.list()]);
+  const layouts = rows.map(({ data, ...rest }) => {
+    let layout: unknown = null;
+    try {
+      layout = toNative(sanitizeLayout(JSON.parse(data)));
+    } catch {
+      layout = null;
+    }
+    return { ...rest, layout };
+  });
+  const body = toToml({
+    format: "open-kb-layout-account",
+    version: 1,
+    exported: new Date().toISOString(),
+    user: profile ?? { ...profileOf(u), created: new Date().toISOString() },
+    layouts,
+  });
+  const name = u.login.replace(/[^a-zA-Z0-9-]/g, "") || "layouts";
+  return new Response(body, {
+    headers: {
+      "content-type": "application/toml; charset=utf-8",
+      "content-disposition": `attachment; filename="${name}-layouts.toml"`,
+      "cache-control": "no-store",
+    },
+  });
+}
+

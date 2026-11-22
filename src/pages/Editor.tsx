@@ -22,8 +22,9 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { api, ApiError, loginUrl, type ForkInfo } from "../lib/api";
-import { type Key, type Layout, LayoutParseError, bounds, importAny, kleRawText, newMeta, toNative } from "../lib/layout";
+import { type Key, type Layout, LayoutParseError, bounds, importAny, kleRawText, newKey, newMeta, toNative } from "../lib/layout";
 import { PRESETS, presetLayout } from "../lib/presets";
+import { KEY_TEMPLATES } from "../lib/keyTemplates";
 import {
   addKey,
   insertKeys,
@@ -431,9 +432,9 @@ export function Editor() {
 
   const selectAll = () => layout && setSelected(new Set(layout.keys.map((_, i) => i)));
 
-  const doAdd = () => {
+  const doAdd = (template?: Partial<Key>) => {
     if (!layout) return;
-    const r = addKey(layout, sel);
+    const r = addKey(layout, sel, template);
     commit(r.layout);
     setSelected(new Set([r.index]));
     setTab("key");
@@ -702,9 +703,45 @@ export function Editor() {
           <span className={`save-state${dirty ? " dirty" : ""}`}>{status}</span>
         </div>
         <div className="ed-tools" role="toolbar" aria-label="Editing tools">
-          <button className="btn sm icon ghost" onClick={doAdd} title="Add key (N)" aria-label="Add key">
+          <button className="btn sm icon ghost" onClick={() => doAdd()} title="Add key (N)" aria-label="Add key">
             <Plus />
           </button>
+          <Menu
+            label="Key templates"
+            trigger={(p) => (
+              <button className="btn sm ghost" {...p} title="Add a special key">
+                <span className="txt">Keys</span> <ChevronDown className="ic chev" />
+              </button>
+            )}
+          >
+            {(close) => (
+              <div className="kt">
+                {(["Standard", "Special", "Controls"] as const).map((group) => (
+                  <div key={group} className="kt-group">
+                    <span className="cap">{group}</span>
+                    <div className="kt-grid">
+                      {KEY_TEMPLATES.filter((t) => t.group === group).map((t) => (
+                        <button
+                          key={t.id}
+                          className="kt-item"
+                          role="menuitem"
+                          onClick={() => {
+                            close();
+                            doAdd(t.key);
+                          }}
+                        >
+                          <span className="kt-art">
+                            <KeyboardView layout={templatePreview(t.key)} background={false} width="100%" height="100%" title={t.name} />
+                          </span>
+                          <span className="kt-name">{t.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Menu>
           <button className="btn sm icon ghost" onClick={doDuplicate} disabled={!sel.length} title="Duplicate (Ctrl+D)" aria-label="Duplicate">
             <CopyPlus />
           </button>
@@ -1044,3 +1081,14 @@ export function Editor() {
     } else downloadPng(clone, name).finally(done);
   }
 }
+
+const previewCache = new Map<Partial<Key>, Layout>();
+function templatePreview(t: Partial<Key>): Layout {
+  let l = previewCache.get(t);
+  if (!l) {
+    l = { meta: newMeta(), keys: [newKey({ ...t, x: -Math.min(0, t.x2 ?? 0) })] };
+    previewCache.set(t, l);
+  }
+  return l;
+}
+

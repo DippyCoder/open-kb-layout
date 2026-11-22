@@ -4,8 +4,12 @@ pages_build_output_dir = "dist"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "ef71724dbb5a4d47b5fd6dfc07c79383"
 
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "open-kb-layout"
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "UserStore"
+script_name = "open-kb-layout-store"
+
+[vars]
+SITE_URL = "https://open-kb-layout.dippycoder.com"

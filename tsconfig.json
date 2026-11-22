@@ -11,5 +11,5 @@
     "isolatedModules": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src", "functions", "shared"]
+  "include": ["src", "functions", "shared", "worker"]
 }

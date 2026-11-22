@@ -1,0 +1,12 @@
+name = "open-kb-layout-store"
+main = "store.ts"
+compatibility_date = "2026-11-01"
+workers_dev = false
+
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "UserStore"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["UserStore"]

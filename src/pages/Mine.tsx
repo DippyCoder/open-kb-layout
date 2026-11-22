@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Globe, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Download, Globe, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, loginUrl, type LayoutSummary } from "../lib/api";
 import { LayoutCard } from "../components/LayoutCard";
 import { GithubIcon, Modal, Spinner, useApp } from "../components/ui";
@@ -69,9 +69,16 @@ export function Mine() {
           <p className="eyebrow">My layouts</p>
           <h1 className="h1">Your workbench</h1>
         </div>
-        <Link className="btn primary" to="/editor">
-          <Plus /> New layout
-        </Link>
+        <div className="row gap-s">
+          {!!items?.length && (
+            <a className="btn" href="/api/export" download title="Download every layout in one TOML file">
+              <Download /> Download all as TOML
+            </a>
+          )}
+          <Link className="btn primary" to="/editor">
+            <Plus /> New layout
+          </Link>
+        </div>
       </div>
       {items === null && <Spinner />}
       {items && !items.length && (

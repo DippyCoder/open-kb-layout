@@ -86,8 +86,10 @@ export function nextKeyPosition(layout: Layout, selected: number[]): Partial<Key
   return { x: 0, y: plain.length ? b.maxY : 0 };
 }
 
-export function addKey(layout: Layout, selected: number[]): { layout: Layout; index: number } {
-  const k = newKey(nextKeyPosition(layout, selected));
+export function addKey(layout: Layout, selected: number[], template: Partial<Key> = {}): { layout: Layout; index: number } {
+  const pos = nextKeyPosition(layout, selected);
+  const k = newKey({ ...pos, ...template, x: (pos.x ?? 0) - Math.min(0, template.x2 ?? 0) });
+  if (template.labels) k.labels = [...template.labels];
   return { layout: { meta: layout.meta, keys: [...layout.keys, k] }, index: layout.keys.length };
 }
 
