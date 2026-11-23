@@ -86,13 +86,14 @@ export async function requireUser(req: Request, env: Env): Promise<SessionUser> 
   return u;
 }
 
-export const isAdmin = (env: Env, u: SessionUser | null) =>
-  !!u &&
+export const isAdminLogin = (env: Env, login: string) =>
   (env.ADMIN_LOGINS ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
-    .includes(u.login.toLowerCase());
+    .includes(login.toLowerCase());
+
+export const isAdmin = (env: Env, u: SessionUser | null) => !!u && isAdminLogin(env, u.login);
 
 export function store(env: Env, uid: number) {
   return env.STORE.get(env.STORE.idFromName(String(uid)));

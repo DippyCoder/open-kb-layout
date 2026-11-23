@@ -1940,3 +1940,18 @@ main > section + section {
 .tp-empty p {
   flex: 1;
 }
+.profile-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.verified {
+  display: inline-grid;
+  place-items: center;
+  color: #3b82f6;
+}
+.verified .lucide {
+  width: 0.62em;
+  height: 0.62em;
+  stroke-width: 2.4;
+}

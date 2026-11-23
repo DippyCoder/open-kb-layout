@@ -13,6 +13,7 @@ import {
   favoriteCounts,
   getCookie,
   isAdmin,
+  isAdminLogin,
   json,
   newLayoutId,
   ownerOf,
@@ -477,13 +478,14 @@ async function toggleFeatured(req: Request, env: Env, id: string) {
 
 async function userPage(env: Env, login: string) {
   if (login.toLowerCase() === TEMPLATE_AUTHOR.toLowerCase()) {
-    return json({ login: TEMPLATE_AUTHOR, avatar: TEMPLATE_AVATAR, layouts: templates().map((t) => ({ ...templateValue(t), template: true })) });
+    return json({ login: TEMPLATE_AUTHOR, avatar: TEMPLATE_AVATAR, official: true, verified: true, layouts: templates().map((t) => ({ ...templateValue(t), template: true })) });
   }
   const items = (await allPublic(env))
     .filter((i) => i.meta.a.toLowerCase() === login.toLowerCase())
     .sort((x, y) => y.meta.u.localeCompare(x.meta.u));
   const layouts = await values(env, items.slice(0, 100).map((i) => i.id));
-  return json({ login: layouts[0]?.author ?? login, avatar: layouts[0]?.avatar ?? "", layouts });
+  const name = layouts[0]?.author ?? login;
+  return json({ login: name, avatar: layouts[0]?.avatar ?? "", official: false, verified: isAdminLogin(env, name), layouts });
 }
 
 async function exportToml(req: Request, env: Env) {

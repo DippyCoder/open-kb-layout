@@ -59,6 +59,14 @@ export interface LayoutInfo {
   favorited: boolean;
 }
 
+export interface UserProfile {
+  login: string;
+  avatar: string;
+  official: boolean;
+  verified: boolean;
+  layouts: PublicLayout[];
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -113,7 +121,7 @@ export const api = {
   toggleFavorite: (id: string) => call<{ favorited: boolean; favorites: number }>("POST", `/favorites/${encodeURIComponent(id)}`),
   featured: () => call<{ curated: boolean; layouts: PublicLayout[]; canCurate: boolean }>("GET", "/featured"),
   toggleFeatured: (id: string) => call<{ featured: boolean }>("POST", `/featured/${encodeURIComponent(id)}`),
-  user: (login: string) => call<{ login: string; avatar: string; layouts: PublicLayout[] }>("GET", `/users/${encodeURIComponent(login)}`),
+  user: (login: string) => call<UserProfile>("GET", `/users/${encodeURIComponent(login)}`),
 };
 
 export const loginUrl = (next = location.pathname + location.search) => `/api/auth/login?next=${encodeURIComponent(next)}`;
