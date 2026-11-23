@@ -1,0 +1,45 @@
+name: Report a layout or user
+description: Flag a layout or an account that breaks the rules.
+title: "[Report] "
+labels: ["report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping keep Open KB Layout friendly. An admin will review this report. Please do not post personal information here, issues are public.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What are you reporting?
+      options:
+        - A layout
+        - A user
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link
+      description: The layout page (/l/...) or the profile page (/u/...).
+      placeholder: https://open-kb-layout.dippycoder.com/l/...
+    validations:
+      required: true
+  - type: dropdown
+    id: reason
+    attributes:
+      label: Reason
+      options:
+        - Spam or advertising
+        - Offensive or inappropriate content
+        - Copied without credit
+        - Impersonation
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What is wrong, and anything that helps us check it.
+    validations:
+      required: false

@@ -64,6 +64,8 @@ export interface UserProfile {
   avatar: string;
   official: boolean;
   verified: boolean;
+  banned: boolean;
+  canModerate: boolean;
   layouts: PublicLayout[];
 }
 
@@ -117,6 +119,8 @@ export const api = {
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") s.set(k, String(v));
     return call<{ total: number; offset: number; layouts: PublicLayout[] }>("GET", `/discover?${s}`);
   },
+  setBan: (login: string, on: boolean) =>
+    call<{ banned: boolean; hidden?: number; restored?: number }>(on ? "POST" : "DELETE", `/users/${encodeURIComponent(login)}/ban`),
   favorites: () => call<{ layouts: PublicLayout[] }>("GET", "/favorites"),
   toggleFavorite: (id: string) => call<{ favorited: boolean; favorites: number }>("POST", `/favorites/${encodeURIComponent(id)}`),
   featured: () => call<{ curated: boolean; layouts: PublicLayout[]; canCurate: boolean }>("GET", "/featured"),
@@ -125,3 +129,15 @@ export const api = {
 };
 
 export const loginUrl = (next = location.pathname + location.search) => `/api/auth/login?next=${encodeURIComponent(next)}`;
+
+export const REPO_URL = "https://github.com/DippyCoder/open-kb-layout";
+
+export function reportUrl(kind: "layout" | "user", name: string) {
+  const p = new URLSearchParams({
+    template: "report.yml",
+    title: `[Report] ${kind === "layout" ? "Layout" : "User"}: ${name}`,
+    link: location.origin + location.pathname,
+  });
+  return `${REPO_URL}/issues/new?${p}`;
+}
+

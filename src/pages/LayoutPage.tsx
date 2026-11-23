@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, Download, FileJson, GitFork, Globe, Heart, Image, LayoutTemplate, Link2, Lock, Pencil, Star, Trash2 } from "lucide-react";
-import { api, loginUrl, type LayoutInfo } from "../lib/api";
+import { ChevronDown, Download, FileJson, Flag, GitFork, Globe, Heart, Image, LayoutTemplate, Link2, Lock, Pencil, Star, Trash2 } from "lucide-react";
+import { api, loginUrl, reportUrl, type LayoutInfo } from "../lib/api";
 import { type Layout, sanitizeLayout } from "../lib/layout";
 import { downloadKle, downloadNative, downloadPng, downloadSvg } from "../lib/files";
 import { KeyboardView } from "../components/KeyboardView";
@@ -79,7 +79,7 @@ export function LayoutPage() {
     try {
       await api.remove(l.id);
       toast("Layout deleted", "ok");
-      nav("/me");
+      nav(info.isOwner ? "/me" : "/discover");
     } catch (e) {
       toast((e as Error).message, "err");
     }
@@ -179,15 +179,20 @@ export function LayoutPage() {
             )}
           </Menu>
           {info.isOwner && (
-            <>
-              <button className="btn ghost" onClick={() => setPublic(!l.public)}>
-                {l.public ? <Lock /> : <Globe />}
-                {l.public ? "Make private" : "Make public"}
-              </button>
-              <button className="btn ghost icon danger" onClick={() => setConfirm(true)} aria-label="Delete layout">
-                <Trash2 />
-              </button>
-            </>
+            <button className="btn ghost" onClick={() => setPublic(!l.public)}>
+              {l.public ? <Lock /> : <Globe />}
+              {l.public ? "Make private" : "Make public"}
+            </button>
+          )}
+          {!info.isOwner && !info.isTemplate && (
+            <a className="btn ghost icon" href={reportUrl("layout", `${l.title} by ${l.author}`)} target="_blank" rel="noreferrer" aria-label="Report layout" title="Report layout">
+              <Flag />
+            </a>
+          )}
+          {!info.isTemplate && (info.isOwner || user?.admin) && (
+            <button className="btn ghost icon danger" onClick={() => setConfirm(true)} aria-label="Delete layout" title={info.isOwner ? "Delete layout" : "Delete layout as admin"}>
+              <Trash2 />
+            </button>
           )}
           {user?.admin && l.public && (
             <button className="btn ghost" onClick={feature} aria-pressed={info.featured}>
@@ -229,7 +234,9 @@ export function LayoutPage() {
           </>
         }
       >
-        <p className="muted">"{l.title}" will be removed permanently.</p>
+        <p className="muted">
+          "{l.title}" will be removed permanently{info.isOwner ? "" : ` from ${l.author}'s account`}. This cannot be undone.
+        </p>
       </Modal>
     </section>
   );

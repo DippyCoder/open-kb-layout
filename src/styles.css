@@ -1955,3 +1955,16 @@ main > section + section {
   height: 0.62em;
   stroke-width: 2.4;
 }
+.profile-id {
+  flex: 1;
+  min-width: 0;
+}
+.profile-actions {
+  gap: 8px;
+  align-self: center;
+}
+.badge.danger {
+  color: var(--err);
+  font-size: 0.8rem;
+  letter-spacing: 0;
+}

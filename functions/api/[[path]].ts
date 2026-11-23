@@ -12,8 +12,11 @@ import {
   db,
   favoriteCounts,
   getCookie,
+  banKey,
+  getBan,
   isAdmin,
   isAdminLogin,
+  type Ban,
   json,
   newLayoutId,
   ownerOf,
@@ -97,7 +100,8 @@ async function route({ request: req, env }: Ctx): Promise<Response> {
   if (a === "discover" && m === "GET") return discover(env, url);
   if (a === "featured" && !b && m === "GET") return featured(req, env);
   if (a === "featured" && b && m === "POST") return toggleFeatured(req, env, b);
-  if (a === "users" && b && m === "GET") return userPage(env, b);
+  if (a === "users" && b && !c && m === "GET") return userPage(req, env, b);
+  if (a === "users" && b && c === "ban" && (m === "POST" || m === "DELETE")) return setBan(req, env, b, m === "POST");
   throw new HttpError(404, "Not found");
 }
 
@@ -130,6 +134,11 @@ function safeNext(next: string | null) {
 }
 
 async function startSession(req: Request, env: Env, user: SessionUser, next: string) {
+  const ban = await getBan(env, user.login);
+  if (ban) {
+    if (ban.uid !== user.id) await env.KV.put(banKey(user.login), JSON.stringify({ ...ban, uid: user.id }));
+    throw new HttpError(403, "This account has been banned");
+  }
   const token = randomId(24);
   await env.KV.put(`sess:${token}`, JSON.stringify(user), { expirationTtl: SESSION_TTL });
   const headers = new Headers({ location: next });
@@ -363,11 +372,53 @@ async function updateLayout(req: Request, env: Env, id: string) {
 
 async function deleteLayout(req: Request, env: Env, id: string) {
   const u = await requireUser(req, env);
-  if (ownerOf(id) !== u.id) throw new HttpError(403, "You can only delete your own layouts");
-  if (!(await store(env, u.id).remove(id))) throw new HttpError(404, "Layout not found");
+  const owner = ownerOf(id);
+  if (!owner || (owner !== u.id && !isAdmin(env, u))) throw new HttpError(403, "You can only delete your own layouts");
+  if (!(await store(env, owner).remove(id))) throw new HttpError(404, "Layout not found");
   await (await db(env)).prepare("DELETE FROM favorites WHERE layout_id = ?").bind(id).run();
   await env.KV.delete(`pub:${id}`);
+  await unfeature(env, [id]);
   return json({ ok: true });
+}
+
+async function unfeature(env: Env, ids: string[]) {
+  const featured = (await env.KV.get<string[]>("featured", "json")) ?? [];
+  const next = featured.filter((x) => !ids.includes(x));
+  if (next.length !== featured.length) await env.KV.put("featured", JSON.stringify(next));
+}
+
+const protectedLogin = (env: Env, login: string) =>
+  login.toLowerCase() === TEMPLATE_AUTHOR.toLowerCase() || isAdminLogin(env, login);
+
+async function setBan(req: Request, env: Env, login: string, on: boolean) {
+  const u = await requireUser(req, env);
+  if (!isAdmin(env, u)) throw new HttpError(403, "Only admins can ban users");
+  if (!/^[a-zA-Z0-9-]{1,39}$/.test(login)) throw new HttpError(400, "Invalid user name");
+  if (protectedLogin(env, login)) throw new HttpError(400, "Admins and the bot cannot be banned");
+  const existing = await getBan(env, login);
+  if (on) {
+    const items = (await allPublic(env)).filter((i) => i.meta.a.toLowerCase() === login.toLowerCase());
+    const uid = items.map((i) => ownerOf(i.id)).find((x): x is number => !!x) ?? existing?.uid ?? null;
+    const ban: Ban = { login, uid, by: u.login, at: new Date().toISOString() };
+    await env.KV.put(banKey(login), JSON.stringify(ban));
+    await Promise.all(items.map((i) => env.KV.delete(`pub:${i.id}`)));
+    await unfeature(env, items.map((i) => i.id));
+    return json({ banned: true, hidden: items.length });
+  }
+  await env.KV.delete(banKey(login));
+  let restored = 0;
+  if (existing?.uid) {
+    const s = store(env, existing.uid);
+    const [profile, rows] = await Promise.all([s.profile(), s.list()]);
+    if (profile) {
+      const owner: SessionUser = { id: profile.id, login: profile.login, name: profile.name, avatar: profile.avatar };
+      for (const row of rows.filter((r) => r.public)) {
+        await syncIndex(env, owner, row);
+        restored++;
+      }
+    }
+  }
+  return json({ banned: false, restored });
 }
 
 async function allPublic(env: Env) {
@@ -476,16 +527,19 @@ async function toggleFeatured(req: Request, env: Env, id: string) {
   return json({ featured: on });
 }
 
-async function userPage(env: Env, login: string) {
+async function userPage(req: Request, env: Env, login: string) {
+  const viewer = await currentUser(req, env);
   if (login.toLowerCase() === TEMPLATE_AUTHOR.toLowerCase()) {
-    return json({ login: TEMPLATE_AUTHOR, avatar: TEMPLATE_AVATAR, official: true, verified: true, layouts: templates().map((t) => ({ ...templateValue(t), template: true })) });
+    return json({ login: TEMPLATE_AUTHOR, avatar: TEMPLATE_AVATAR, official: true, verified: true, banned: false, canModerate: false, layouts: templates().map((t) => ({ ...templateValue(t), template: true })) });
   }
   const items = (await allPublic(env))
     .filter((i) => i.meta.a.toLowerCase() === login.toLowerCase())
     .sort((x, y) => y.meta.u.localeCompare(x.meta.u));
   const layouts = await values(env, items.slice(0, 100).map((i) => i.id));
   const name = layouts[0]?.author ?? login;
-  return json({ login: name, avatar: layouts[0]?.avatar ?? "", official: false, verified: isAdminLogin(env, name), layouts });
+  const ban = await getBan(env, name);
+  const canModerate = isAdmin(env, viewer) && !protectedLogin(env, name);
+  return json({ login: name, avatar: layouts[0]?.avatar ?? "", official: false, verified: isAdminLogin(env, name), banned: !!ban, canModerate, layouts });
 }
 
 async function exportToml(req: Request, env: Env) {

@@ -1,0 +1,42 @@
+name: Bug report
+description: Something on the site does not work as expected.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the editor
+        2. Select a key
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link
+      description: The page where it happened, if it helps.
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Chrome or Edge
+        - Firefox
+        - Safari
+        - Other
+  - type: textarea
+    id: layout
+    attributes:
+      label: Layout data
+      description: If the bug is about a specific layout, paste its JSON or KLE raw data.
+      render: json

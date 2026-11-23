@@ -77,8 +77,20 @@ export function cookie(name: string, value: string, maxAge: number, req: Request
 export async function currentUser(req: Request, env: Env): Promise<SessionUser | null> {
   const token = getCookie(req, SESSION_COOKIE);
   if (!token || !/^[0-9a-f]{48}$/.test(token)) return null;
-  return env.KV.get<SessionUser>(`sess:${token}`, "json");
+  const u = await env.KV.get<SessionUser>(`sess:${token}`, "json");
+  if (!u) return null;
+  return (await getBan(env, u.login)) ? null : u;
 }
+
+export interface Ban {
+  login: string;
+  uid: number | null;
+  by: string;
+  at: string;
+}
+
+export const banKey = (login: string) => `ban:${login.toLowerCase()}`;
+export const getBan = (env: Env, login: string) => env.KV.get<Ban>(banKey(login), "json");
 
 export async function requireUser(req: Request, env: Env): Promise<SessionUser> {
   const u = await currentUser(req, env);

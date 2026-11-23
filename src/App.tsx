@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { LayoutGrid, LogOut, Moon, Plus, Sun, User as UserIcon } from "lucide-react";
 import { Avatar, GithubIcon, Menu, useApp } from "./components/ui";
-import { api, loginUrl } from "./lib/api";
+import { api, loginUrl, REPO_URL } from "./lib/api";
 import { Home } from "./pages/Home";
 import { Discover } from "./pages/Discover";
 import { LayoutPage } from "./pages/LayoutPage";
@@ -115,7 +115,7 @@ function Footer() {
           <a href="https://www.keyboard-layout-editor.com/" rel="noreferrer" target="_blank">
             Inspired by KLE
           </a>
-          <a href="https://github.com/DippyCoder/open-kb-layout" rel="noreferrer" target="_blank" className="gh-link">
+          <a href={REPO_URL} rel="noreferrer" target="_blank" className="gh-link">
             <GithubIcon /> Source on GitHub
           </a>
           <span className="dim">MIT License</span>
