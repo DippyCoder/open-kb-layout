@@ -11,5 +11,10 @@ name = "STORE"
 class_name = "UserStore"
 script_name = "open-kb-layout-store"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "open-kb-layout"
+database_id = "f23e3857-08eb-4679-9dec-8ade11f5a933"
+
 [vars]
 SITE_URL = "https://open-kb-layout.dippycoder.com"

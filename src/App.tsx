@@ -115,6 +115,10 @@ function Footer() {
           <a href="https://www.keyboard-layout-editor.com/" rel="noreferrer" target="_blank">
             Inspired by KLE
           </a>
+          <a href="https://github.com/DippyCoder/open-kb-layout" rel="noreferrer" target="_blank" className="gh-link">
+            <GithubIcon /> Source on GitHub
+          </a>
+          <span className="dim">MIT License</span>
         </div>
       </div>
     </footer>

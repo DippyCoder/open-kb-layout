@@ -31,6 +31,14 @@ export function labelLines(label: string): string[] {
 }
 
 const fontPx = (size: number) => 6 + 2 * size;
+const CHAR_W = 0.6;
+
+function fitFont(size: number, lines: string[], width: number, height: number): number {
+  const longest = Math.max(1, ...lines.map((l) => l.length));
+  const byWidth = width / (longest * CHAR_W);
+  const byHeight = height / (lines.length * 1.08);
+  return Math.max(4, Math.min(size, byWidth, byHeight));
+}
 
 function KeyLabels({ k, ix, iy, iw, ih, fy, fh }: { k: Key; ix: number; iy: number; iw: number; ih: number; fy: number; fh: number }) {
   const pad = 3;
@@ -41,9 +49,9 @@ function KeyLabels({ k, ix, iy, iw, ih, fy, fh }: { k: Key; ix: number; iy: numb
     const col = i % 3;
     const front = i >= 9;
     const row = front ? 3 : Math.floor(i / 3);
-    const size = fontPx(k.textSize[i] || k.defaultTextSize);
-    const fs = front ? Math.min(size, Math.max(7, fh - 1)) : size;
     const lines = labelLines(label);
+    const size = fontPx(k.textSize[i] || k.defaultTextSize);
+    const fs = front ? fitFont(Math.min(size, Math.max(7, fh - 1)), lines.slice(0, 1), iw - pad * 2, fh) : fitFont(size, lines, iw - pad * 2, ih - pad);
     const lh = fs * 1.08;
     const x = col === 0 ? ix + pad : col === 1 ? ix + iw / 2 : ix + iw - pad;
     const anchor = col === 0 ? "start" : col === 1 ? "middle" : "end";
@@ -102,7 +110,7 @@ function Knob({ k, side, edge }: { k: Key; side: string; edge: string }) {
     );
   });
   const label = k.labels.find((l) => l) ?? "";
-  const fs = fontPx(k.defaultTextSize) - 1;
+  const fs = fitFont(fontPx(k.defaultTextSize) - 1, labelLines(label).slice(0, 1), inner * 1.5, inner * 0.6);
   return (
     <g>
       <circle cx={cx} cy={cy} r={rad} fill={side} stroke={edge} strokeWidth={1} />

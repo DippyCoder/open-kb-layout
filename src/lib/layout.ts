@@ -577,6 +577,9 @@ export interface PreviewKey {
   ry?: number;
   c: string;
   k?: 1;
+  l?: string[];
+  t?: string;
+  f?: number;
 }
 
 export function toPreview(layout: Layout): { bg: string; keys: PreviewKey[] } {
@@ -585,6 +588,10 @@ export function toPreview(layout: Layout): { bg: string; keys: PreviewKey[] } {
     if (k.x2 || k.y2 || k.w2 !== k.w || k.h2 !== k.h) Object.assign(p, { x2: k.x2, y2: k.y2, w2: k.w2, h2: k.h2 });
     if (k.r) Object.assign(p, { r: k.r, rx: k.rx, ry: k.ry });
     if (k.knob) p.k = 1;
+    const labels = trimEnd(k.labels.map((l) => (l ?? "").slice(0, 40)), (l) => !l);
+    if (labels.length) p.l = labels;
+    if (k.defaultTextColor !== DEFAULT_TEXT_COLOR) p.t = k.defaultTextColor;
+    if (k.defaultTextSize !== DEFAULT_TEXT_SIZE) p.f = k.defaultTextSize;
     return p;
   });
   return { bg: layout.meta.backcolor, keys };
@@ -608,6 +615,9 @@ export function previewToLayout(p: { bg: string; keys: PreviewKey[] }): Layout {
         ry: k.ry ?? 0,
         color: k.c,
         knob: k.k === 1,
+        labels: Array.from({ length: 12 }, (_, i) => k.l?.[i] ?? ""),
+        defaultTextColor: k.t ?? DEFAULT_TEXT_COLOR,
+        defaultTextSize: k.f ?? DEFAULT_TEXT_SIZE,
       }),
     ),
   };

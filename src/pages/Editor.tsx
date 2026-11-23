@@ -6,7 +6,6 @@ import {
   CopyPlus,
   Download,
   FileJson,
-  FilePlus2,
   Image,
   LayoutTemplate,
   Maximize2,
@@ -23,7 +22,7 @@ import {
 } from "lucide-react";
 import { api, ApiError, loginUrl, type ForkInfo } from "../lib/api";
 import { type Key, type Layout, LayoutParseError, bounds, importAny, kleRawText, newKey, newMeta, toNative } from "../lib/layout";
-import { PRESETS, presetLayout } from "../lib/presets";
+import { presetLayout } from "../lib/presets";
 import { KEY_TEMPLATES } from "../lib/keyTemplates";
 import {
   addKey,
@@ -41,6 +40,7 @@ import { downloadKle, downloadNative, downloadPng, downloadSvg, readFileText } f
 import { KeyboardView, U } from "../components/KeyboardView";
 import { GithubIcon, Menu, Modal, Spinner, useApp } from "../components/ui";
 import { EditorPanel, type Tab } from "./EditorPanel";
+import { TemplatePicker, type PickSource } from "./TemplatePicker";
 
 interface Doc {
   id: string | null;
@@ -111,6 +111,7 @@ export function Editor() {
   const [loadError, setLoadError] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [tab, setTab] = useState<Tab>("key");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [slot, setSlot] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [grid, setGrid] = useState(0.25);
@@ -440,6 +441,31 @@ export function Editor() {
     setTab("key");
   };
 
+  const applyPick = async (src: PickSource) => {
+    if (!layout) return;
+    let next: Layout;
+    let fork: ForkInfo | null | undefined;
+    if (src.kind === "blank") next = { meta: { ...layout.meta }, keys: [] };
+    else if (src.kind === "preset") {
+      const pl = presetLayout(src.id);
+      next = { meta: { ...layout.meta, backcolor: pl.meta.backcolor }, keys: pl.keys };
+    } else {
+      try {
+        const r = await api.get(src.id);
+        const l = importAny(JSON.stringify(r.layout.data));
+        next = { meta: { ...layout.meta, backcolor: l.meta.backcolor, radii: l.meta.radii }, keys: l.keys };
+        if (!src.own && !doc.id) fork = { id: src.id, title: src.title, author: src.author };
+      } catch (e) {
+        toast((e as Error).message, "err");
+        return;
+      }
+    }
+    commit(next);
+    if (fork) setDoc((d) => ({ ...d, fork }));
+    setSelected(new Set());
+    fitted.current = false;
+  };
+
   const doDelete = () => {
     if (!layout || !selected.size) return;
     commit(removeKeys(layout, selected));
@@ -762,45 +788,9 @@ export function Editor() {
             <Redo2 />
           </button>
           <span className="vsep" />
-          <Menu
-            label="Templates"
-            trigger={(p) => (
-              <button className="btn sm ghost" {...p}>
-                <LayoutTemplate /> <span className="txt">Templates</span> <ChevronDown className="ic chev" />
-              </button>
-            )}
-          >
-            {(close) => (
-              <>
-                <button
-                  className="opt"
-                  onClick={() => {
-                    close();
-                    commit({ meta: { ...layout.meta }, keys: [] });
-                    setSelected(new Set());
-                  }}
-                >
-                  <FilePlus2 /> Blank canvas
-                </button>
-                <div className="sep" />
-                {PRESETS.map((p) => (
-                  <button
-                    key={p.id}
-                    className="opt"
-                    onClick={() => {
-                      close();
-                      const pl = presetLayout(p.id);
-                      commit({ meta: { ...layout.meta, backcolor: pl.meta.backcolor }, keys: pl.keys });
-                      setSelected(new Set());
-                      fitted.current = false;
-                    }}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </>
-            )}
-          </Menu>
+          <button className="btn sm ghost" onClick={() => setPickerOpen(true)}>
+            <LayoutTemplate /> <span className="txt">Templates</span>
+          </button>
           <Menu
             label="Import"
             trigger={(p) => (
@@ -991,6 +981,7 @@ export function Editor() {
         }}
       />
 
+      <TemplatePicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={applyPick} />
       <Modal
         open={pasteOpen}
         onClose={() => setPasteOpen(false)}

@@ -46,6 +46,17 @@ export interface PublicLayout {
   keyCount: number;
   forkedFrom?: ForkInfo;
   preview: Preview;
+  template?: boolean;
+  favorites?: number;
+}
+
+export interface LayoutInfo {
+  layout: LayoutFull;
+  isOwner: boolean;
+  isTemplate: boolean;
+  featured: boolean;
+  favorites: number;
+  favorited: boolean;
 }
 
 export class ApiError extends Error {
@@ -89,15 +100,17 @@ export const api = {
   me: () => call<{ user: User | null }>("GET", "/me"),
   logout: () => call<{ ok: true }>("POST", "/auth/logout"),
   mine: () => call<{ layouts: LayoutSummary[] }>("GET", "/layouts"),
-  get: (id: string) => call<{ layout: LayoutFull; isOwner: boolean; featured: boolean }>("GET", `/layouts/${encodeURIComponent(id)}`),
+  get: (id: string) => call<LayoutInfo>("GET", `/layouts/${encodeURIComponent(id)}`),
   create: (p: SavePayload) => call<{ layout: LayoutFull }>("POST", "/layouts", p),
   update: (id: string, p: SavePayload) => call<{ layout: LayoutFull }>("PUT", `/layouts/${encodeURIComponent(id)}`, p),
   remove: (id: string) => call<{ ok: true }>("DELETE", `/layouts/${encodeURIComponent(id)}`),
-  discover: (params: { q?: string; sort?: string; offset?: number; limit?: number }) => {
+  discover: (params: { q?: string; sort?: string; kind?: string; offset?: number; limit?: number }) => {
     const s = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") s.set(k, String(v));
     return call<{ total: number; offset: number; layouts: PublicLayout[] }>("GET", `/discover?${s}`);
   },
+  favorites: () => call<{ layouts: PublicLayout[] }>("GET", "/favorites"),
+  toggleFavorite: (id: string) => call<{ favorited: boolean; favorites: number }>("POST", `/favorites/${encodeURIComponent(id)}`),
   featured: () => call<{ curated: boolean; layouts: PublicLayout[]; canCurate: boolean }>("GET", "/featured"),
   toggleFeatured: (id: string) => call<{ featured: boolean }>("POST", `/featured/${encodeURIComponent(id)}`),
   user: (login: string) => call<{ login: string; avatar: string; layouts: PublicLayout[] }>("GET", `/users/${encodeURIComponent(login)}`),

@@ -10,7 +10,8 @@ const PAGE = 24;
 export function Discover() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
-  const sort = params.get("sort") === "keys" ? "keys" : "recent";
+  const sortParam = params.get("sort");
+  const sort = sortParam === "popular" ? sortParam : "recent";
   const [input, setInput] = useState(q);
   const [items, setItems] = useState<PublicLayout[]>([]);
   const [total, setTotal] = useState(0);
@@ -58,11 +59,11 @@ export function Discover() {
     }
   };
 
-  const setSort = (s: string) =>
+  const setParam = (key: string, value: string, fallback: string) =>
     setParams((p) => {
       const n = new URLSearchParams(p);
-      if (s === "recent") n.delete("sort");
-      else n.set("sort", s);
+      if (value === fallback) n.delete(key);
+      else n.set(key, value);
       return n;
     });
 
@@ -70,8 +71,8 @@ export function Discover() {
     <section className="wrap page-pad">
       <div className="sec-head">
         <p className="eyebrow">Discover</p>
-        <h1 className="h1">Public layouts</h1>
-        <p className="lead">Browse what people have built. Open any of them to view, export or remix.</p>
+        <h1 className="h1">Layouts and templates</h1>
+        <p className="lead">Browse what people have built and the built-in templates. Open any of them to view, export, remix or favorite.</p>
       </div>
       <div className="toolbar-row">
         <label className="input search">
@@ -92,9 +93,9 @@ export function Discover() {
         <div className="seg" role="radiogroup" aria-label="Sort">
           {[
             ["recent", "Recent"],
-            ["keys", "Most keys"],
+            ["popular", "Likes"],
           ].map(([v, l]) => (
-            <button key={v} role="radio" aria-checked={sort === v} onClick={() => setSort(v)}>
+            <button key={v} role="radio" aria-checked={sort === v} onClick={() => setParam("sort", v, "recent")}>
               {l}
             </button>
           ))}
@@ -116,6 +117,8 @@ export function Discover() {
             preview={l.preview}
             keyCount={l.keyCount}
             forked={!!l.forkedFrom}
+            favorites={l.favorites}
+            template={l.template}
           />
         ))}
       </div>

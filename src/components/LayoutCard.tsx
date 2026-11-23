@@ -1,6 +1,6 @@
 import { memo, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { GitFork, Globe, Lock } from "lucide-react";
+import { GitFork, Globe, Heart, LayoutTemplate, Lock } from "lucide-react";
 import { previewToLayout } from "../lib/layout";
 import type { Preview } from "../lib/api";
 import { KeyboardView } from "./KeyboardView";
@@ -23,9 +23,11 @@ interface Props {
   isPublic?: boolean;
   forked?: boolean;
   showAuthor?: boolean;
+  favorites?: number;
+  template?: boolean;
 }
 
-export function LayoutCard({ id, title, author, avatar, updated, preview, keyCount, isPublic, forked, showAuthor = true }: Props) {
+export function LayoutCard({ id, title, author, avatar, updated, preview, keyCount, isPublic, forked, showAuthor = true, favorites, template }: Props) {
   return (
     <Link to={`/l/${id}`} className="lcard glass">
       <div className="lcard-art">
@@ -38,6 +40,12 @@ export function LayoutCard({ id, title, author, avatar, updated, preview, keyCou
             <span className="badge" title={isPublic ? "Public" : "Private"}>
               {isPublic ? <Globe /> : <Lock />}
               {isPublic ? "Public" : "Private"}
+            </span>
+          )}
+          {template && (
+            <span className="badge">
+              <LayoutTemplate />
+              Template
             </span>
           )}
         </div>
@@ -53,7 +61,13 @@ export function LayoutCard({ id, title, author, avatar, updated, preview, keyCou
               <GitFork />
             </span>
           )}
-          <span className="dim">{keyCount !== undefined ? `${keyCount} keys, ` : ""}{timeAgo(updated)}</span>
+          {!!favorites && (
+            <span className="dim fav-count" title={`${favorites} favorite${favorites === 1 ? "" : "s"}`}>
+              <Heart />
+              {favorites}
+            </span>
+          )}
+          <span className="dim">{keyCount !== undefined ? `${keyCount} keys` : ""}{template ? "" : `${keyCount !== undefined ? ", " : ""}${timeAgo(updated)}`}</span>
         </div>
       </div>
     </Link>

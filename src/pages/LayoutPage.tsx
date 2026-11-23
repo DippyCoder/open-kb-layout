@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, Download, FileJson, GitFork, Globe, Image, Link2, Lock, Pencil, Star, Trash2 } from "lucide-react";
-import { api, type LayoutFull } from "../lib/api";
+import { ChevronDown, Download, FileJson, GitFork, Globe, Heart, Image, LayoutTemplate, Link2, Lock, Pencil, Star, Trash2 } from "lucide-react";
+import { api, loginUrl, type LayoutInfo } from "../lib/api";
 import { type Layout, sanitizeLayout } from "../lib/layout";
 import { downloadKle, downloadNative, downloadPng, downloadSvg } from "../lib/files";
 import { KeyboardView } from "../components/KeyboardView";
@@ -12,7 +12,7 @@ export function LayoutPage() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const { user, toast } = useApp();
-  const [info, setInfo] = useState<{ layout: LayoutFull; isOwner: boolean; featured: boolean } | null>(null);
+  const [info, setInfo] = useState<LayoutInfo | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
   const [confirm, setConfirm] = useState(false);
   const svg = useRef<SVGSVGElement>(null);
@@ -61,6 +61,19 @@ export function LayoutPage() {
     }
   };
 
+  const favorite = async () => {
+    if (!user) {
+      location.href = loginUrl();
+      return;
+    }
+    try {
+      const r = await api.toggleFavorite(l.id);
+      setInfo({ ...info, favorited: r.favorited, favorites: r.favorites });
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+  };
+
   const remove = async () => {
     setConfirm(false);
     try {
@@ -86,9 +99,13 @@ export function LayoutPage() {
       <div className="lp-head">
         <div className="stack-s">
           <div className="row">
-            <span className="badge">{l.public ? <Globe /> : <Lock />}{l.public ? "Public" : "Private"}</span>
+            {info.isTemplate ? (
+              <span className="badge"><LayoutTemplate />Template</span>
+            ) : (
+              <span className="badge">{l.public ? <Globe /> : <Lock />}{l.public ? "Public" : "Private"}</span>
+            )}
             {info.featured && <span className="badge"><Star />Featured</span>}
-            <span className="dim small">{layout.keys.length} keys, updated {timeAgo(l.updated)}</span>
+            <span className="dim small">{layout.keys.length} keys{info.isTemplate ? "" : `, updated ${timeAgo(l.updated)}`}</span>
           </div>
           <h1 className="h1">{l.title}</h1>
           <div className="row">
@@ -107,7 +124,11 @@ export function LayoutPage() {
           </div>
         </div>
         <div className="row lp-actions">
-          {info.isOwner ? (
+          {info.isTemplate ? (
+            <Link className="btn primary" to={`/editor?preset=${encodeURIComponent(l.id.replace(/^tpl-/, ""))}`}>
+              <Pencil /> Use template
+            </Link>
+          ) : info.isOwner ? (
             <Link className="btn primary" to={`/editor/${l.id}`}>
               <Pencil /> Edit
             </Link>
@@ -115,6 +136,17 @@ export function LayoutPage() {
             <Link className="btn primary" to={`/editor?from=${encodeURIComponent(l.id)}`}>
               <GitFork /> Remix
             </Link>
+          )}
+          {l.public && (
+            <button
+              className={`btn fav${info.favorited ? " on" : ""}`}
+              onClick={favorite}
+              aria-pressed={info.favorited}
+              title={info.favorited ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Heart /> {info.favorited ? "Favorited" : "Favorite"}
+              {info.favorites > 0 && <span className="count">{info.favorites}</span>}
+            </button>
           )}
           <Menu
             label="Export"

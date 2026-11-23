@@ -4,6 +4,7 @@ import type { LayoutRow, UserStore } from "../../worker/store";
 export interface Env {
   KV: KVNamespace;
   STORE: DurableObjectNamespace<UserStore>;
+  DB: D1Database;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   ADMIN_LOGINS?: string;
@@ -112,3 +113,26 @@ export function clean<T>(v: T): T {
 export function toToml(data: Record<string, unknown>): string {
   return stringify(clean(data));
 }
+
+export const FAVORITE_LIMIT = 500;
+
+let dbReady: Promise<unknown> | null = null;
+
+export async function db(env: Env): Promise<D1Database> {
+  dbReady ??= env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS favorites (uid INTEGER NOT NULL, layout_id TEXT NOT NULL, created TEXT NOT NULL, PRIMARY KEY (uid, layout_id))"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS favorites_layout ON favorites (layout_id)"),
+  ]).catch((e) => {
+    dbReady = null;
+    throw e;
+  });
+  await dbReady;
+  return env.DB;
+}
+
+export async function favoriteCounts(env: Env): Promise<Map<string, number>> {
+  const d = await db(env);
+  const { results } = await d.prepare("SELECT layout_id, COUNT(*) AS n FROM favorites GROUP BY layout_id").all<{ layout_id: string; n: number }>();
+  return new Map(results.map((r) => [r.layout_id, r.n]));
+}
+

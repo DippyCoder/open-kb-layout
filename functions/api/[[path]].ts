@@ -6,8 +6,11 @@ import {
   LAYOUT_LIMIT,
   SESSION_COOKIE,
   SESSION_TTL,
+  FAVORITE_LIMIT,
   cookie,
   currentUser,
+  db,
+  favoriteCounts,
   getCookie,
   isAdmin,
   json,
@@ -20,6 +23,7 @@ import {
   toToml,
 } from "../_lib/core";
 import { sanitizeLayout, toNative, toPreview, LayoutParseError } from "../../src/lib/layout";
+import { TEMPLATE_AUTHOR, TEMPLATE_AVATAR, findTemplate, isTemplateId, templateValue, templates } from "../_lib/templates";
 
 type Ctx = EventContext<Env, string, Record<string, unknown>>;
 
@@ -41,6 +45,8 @@ interface PubValue {
   keyCount: number;
   forkedFrom?: { id: string; title: string; author: string };
   preview: ReturnType<typeof toPreview>;
+  template?: boolean;
+  favorites?: number;
 }
 
 const MAX_DATA = 400_000;
@@ -85,6 +91,8 @@ async function route({ request: req, env }: Ctx): Promise<Response> {
     if (b && !c && m === "DELETE") return deleteLayout(req, env, b);
   }
   if (a === "export" && !b && m === "GET") return exportToml(req, env);
+  if (a === "favorites" && !b && m === "GET") return listFavorites(req, env);
+  if (a === "favorites" && b && !c && m === "POST") return toggleFavorite(req, env, b);
   if (a === "discover" && m === "GET") return discover(env, url);
   if (a === "featured" && !b && m === "GET") return featured(req, env);
   if (a === "featured" && b && m === "POST") return toggleFeatured(req, env, b);
@@ -289,16 +297,37 @@ async function createLayout(req: Request, env: Env) {
   return json({ layout: { ...summarize(stored, u), data: JSON.parse(stored.data) } }, { status: 201 });
 }
 
+async function favoriteInfo(env: Env, id: string, u: SessionUser | null) {
+  const d = await db(env);
+  const [count, mine] = await Promise.all([
+    d.prepare("SELECT COUNT(*) AS n FROM favorites WHERE layout_id = ?").bind(id).first<number>("n"),
+    u ? d.prepare("SELECT 1 AS x FROM favorites WHERE uid = ? AND layout_id = ?").bind(u.id, id).first("x") : null,
+  ]);
+  return { favorites: count ?? 0, favorited: !!mine };
+}
+
 async function getLayout(req: Request, env: Env, id: string) {
   const u = await currentUser(req, env);
+  const featuredIds = (await env.KV.get<string[]>("featured", "json")) ?? [];
+  const tpl = isTemplateId(id) ? findTemplate(id) : null;
+  if (tpl) {
+    return json({
+      layout: { id: tpl.id, title: tpl.title, description: tpl.description, public: true, created: tpl.updated, updated: tpl.updated, author: tpl.author, avatar: tpl.avatar, data: tpl.data },
+      isOwner: false,
+      isTemplate: true,
+      featured: featuredIds.includes(id),
+      ...(await favoriteInfo(env, id, u)),
+    });
+  }
   const found = await loadLayout(env, id);
   const isOwner = !!found && !!u && found.owner.id === u.id;
   if (!found || (!found.layout.public && !isOwner)) throw new HttpError(404, "Layout not found");
-  const featuredIds = (await env.KV.get<string[]>("featured", "json")) ?? [];
   return json({
     layout: { ...summarize(found.layout, found.owner), data: JSON.parse(found.layout.data) },
     isOwner,
+    isTemplate: false,
     featured: featuredIds.includes(id),
+    ...(await favoriteInfo(env, id, u)),
   });
 }
 
@@ -335,6 +364,7 @@ async function deleteLayout(req: Request, env: Env, id: string) {
   const u = await requireUser(req, env);
   if (ownerOf(id) !== u.id) throw new HttpError(403, "You can only delete your own layouts");
   if (!(await store(env, u.id).remove(id))) throw new HttpError(404, "Layout not found");
+  await (await db(env)).prepare("DELETE FROM favorites WHERE layout_id = ?").bind(id).run();
   await env.KV.delete(`pub:${id}`);
   return json({ ok: true });
 }
@@ -352,18 +382,31 @@ async function allPublic(env: Env) {
 }
 
 async function values(env: Env, ids: string[]) {
-  const got = await Promise.all(ids.map((id) => env.KV.get<PubValue>(`pub:${id}`, "json")));
+  const got = await Promise.all(
+    ids.map(async (id): Promise<PubValue | null> => {
+      if (!isTemplateId(id)) return env.KV.get<PubValue>(`pub:${id}`, "json");
+      const t = findTemplate(id);
+      return t ? { ...templateValue(t), template: true } : null;
+    }),
+  );
   return got.filter((v): v is PubValue => !!v);
+}
+
+function templateItems() {
+  return templates().map((t) => ({ id: t.id, meta: { t: t.title, a: t.author, d: t.description, u: t.updated, n: t.keyCount } as PubMeta }));
 }
 
 async function discover(env: Env, url: URL) {
   const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
   const author = (url.searchParams.get("author") ?? "").trim().toLowerCase();
-  const sort = url.searchParams.get("sort") === "keys" ? "keys" : "recent";
+  const sortParam = url.searchParams.get("sort");
+  const sort = sortParam === "keys" || sortParam === "popular" ? sortParam : "recent";
+  const kind = url.searchParams.get("kind");
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
   const limit = Math.min(48, Math.max(1, parseInt(url.searchParams.get("limit") ?? "24", 10) || 24));
   const terms = q.split(/\s+/).filter(Boolean);
-  let items = await allPublic(env);
+  const [community, counts] = await Promise.all([kind === "templates" ? [] : allPublic(env), favoriteCounts(env)]);
+  let items = [...community, ...(kind === "community" ? [] : templateItems())];
   if (author) items = items.filter((i) => i.meta.a.toLowerCase() === author);
   if (terms.length) {
     items = items.filter((i) => {
@@ -371,9 +414,41 @@ async function discover(env: Env, url: URL) {
       return terms.every((t) => hay.includes(t));
     });
   }
-  items.sort((x, y) => (sort === "keys" ? y.meta.n - x.meta.n : 0) || y.meta.u.localeCompare(x.meta.u));
+  const fav = (id: string) => counts.get(id) ?? 0;
+  items.sort(
+    (x, y) =>
+      (sort === "keys" ? y.meta.n - x.meta.n : sort === "popular" ? fav(y.id) - fav(x.id) : 0) || y.meta.u.localeCompare(x.meta.u),
+  );
   const page = items.slice(offset, offset + limit);
-  return json({ total: items.length, offset, layouts: await values(env, page.map((p) => p.id)) });
+  const layouts = (await values(env, page.map((p) => p.id))).map((v) => ({ ...v, favorites: fav(v.id) }));
+  return json({ total: items.length, offset, layouts });
+}
+
+async function listFavorites(req: Request, env: Env) {
+  const u = await requireUser(req, env);
+  const d = await db(env);
+  const { results } = await d
+    .prepare("SELECT layout_id FROM favorites WHERE uid = ? ORDER BY created DESC LIMIT ?")
+    .bind(u.id, FAVORITE_LIMIT)
+    .all<{ layout_id: string }>();
+  return json({ layouts: await values(env, results.map((r) => r.layout_id)) });
+}
+
+async function toggleFavorite(req: Request, env: Env, id: string) {
+  const u = await requireUser(req, env);
+  const d = await db(env);
+  const existing = await d.prepare("SELECT 1 AS x FROM favorites WHERE uid = ? AND layout_id = ?").bind(u.id, id).first("x");
+  if (existing) {
+    await d.prepare("DELETE FROM favorites WHERE uid = ? AND layout_id = ?").bind(u.id, id).run();
+  } else {
+    const visible = isTemplateId(id) ? !!findTemplate(id) : !!(await env.KV.get(`pub:${id}`));
+    if (!visible) throw new HttpError(404, "Only public layouts can be favorited");
+    const n = (await d.prepare("SELECT COUNT(*) AS n FROM favorites WHERE uid = ?").bind(u.id).first<number>("n")) ?? 0;
+    if (n >= FAVORITE_LIMIT) throw new HttpError(403, "You have reached the maximum number of favorites");
+    await d.prepare("INSERT OR IGNORE INTO favorites (uid, layout_id, created) VALUES (?, ?, ?)").bind(u.id, id, new Date().toISOString()).run();
+  }
+  const count = (await d.prepare("SELECT COUNT(*) AS n FROM favorites WHERE layout_id = ?").bind(id).first<number>("n")) ?? 0;
+  return json({ favorited: !existing, favorites: count });
 }
 
 async function featured(req: Request, env: Env) {
@@ -394,13 +469,16 @@ async function toggleFeatured(req: Request, env: Env, id: string) {
   if (!isAdmin(env, u)) throw new HttpError(403, "Only admins can feature layouts");
   const ids = (await env.KV.get<string[]>("featured", "json")) ?? [];
   const on = !ids.includes(id);
-  if (on && !(await env.KV.get(`pub:${id}`))) throw new HttpError(400, "Only public layouts can be featured");
+  if (on && !isTemplateId(id) && !(await env.KV.get(`pub:${id}`))) throw new HttpError(400, "Only public layouts can be featured");
   const next = on ? [id, ...ids].slice(0, 12) : ids.filter((x) => x !== id);
   await env.KV.put("featured", JSON.stringify(next));
   return json({ featured: on });
 }
 
 async function userPage(env: Env, login: string) {
+  if (login.toLowerCase() === TEMPLATE_AUTHOR.toLowerCase()) {
+    return json({ login: TEMPLATE_AUTHOR, avatar: TEMPLATE_AVATAR, layouts: templates().map((t) => ({ ...templateValue(t), template: true })) });
+  }
   const items = (await allPublic(env))
     .filter((i) => i.meta.a.toLowerCase() === login.toLowerCase())
     .sort((x, y) => y.meta.u.localeCompare(x.meta.u));

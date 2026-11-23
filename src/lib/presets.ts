@@ -141,19 +141,20 @@ function split(): unknown[][] {
 export interface Preset {
   id: string;
   name: string;
+  description: string;
   rows: () => unknown[][];
 }
 
 export const PRESETS: Preset[] = [
-  { id: "full", name: "Full size ANSI", rows: full },
-  { id: "tkl", name: "Tenkeyless ANSI", rows: tkl },
-  { id: "75", name: "75%", rows: seventyFive },
-  { id: "65", name: "65%", rows: sixtyFive },
-  { id: "60", name: "60% ANSI", rows: sixty },
-  { id: "iso", name: "60% ISO", rows: iso },
-  { id: "ortho", name: "Ortholinear 4x12", rows: ortho },
-  { id: "split", name: "Split with thumbs", rows: split },
-  { id: "numpad", name: "Numpad", rows: numpad },
+  { id: "full", name: "Full size ANSI", description: "The classic 104-key board with function row, navigation cluster and numpad.", rows: full },
+  { id: "tkl", name: "Tenkeyless ANSI", description: "A full board without the numpad, 87 keys.", rows: tkl },
+  { id: "75", name: "75%", description: "Compact layout that keeps the function row and arrows, packed tight.", rows: seventyFive },
+  { id: "65", name: "65%", description: "A 60% with arrows and a column of navigation keys.", rows: sixtyFive },
+  { id: "60", name: "60% ANSI", description: "Alphas, numbers and modifiers, nothing else.", rows: sixty },
+  { id: "iso", name: "60% ISO", description: "The European 60% with ISO Enter and a short left Shift.", rows: iso },
+  { id: "ortho", name: "Ortholinear 4x12", description: "Keys in a straight grid, Planck style.", rows: ortho },
+  { id: "split", name: "Split with thumbs", description: "Two halves with rotated thumb clusters.", rows: split },
+  { id: "numpad", name: "Numpad", description: "A standalone 17-key number pad.", rows: numpad },
 ];
 
 export function presetLayout(id: string): Layout {
